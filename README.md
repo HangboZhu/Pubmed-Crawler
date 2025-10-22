@@ -1,3 +1,4 @@
+# Pubmed-Crawler
 ## 1. Introduction
 Hey there! This project is designed to help you **scrape search results from Pubmed** and automatically organize them into **structured text** (like Excel spreadsheets). It’s super handy for literature analysis and screening—no more manual copy-pasting!
 ![](./images/Gemini_Generated_Image_qalaifqalaifqala.png)
