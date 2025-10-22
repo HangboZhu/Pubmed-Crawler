@@ -83,13 +83,13 @@ Many people mix up the link at first—here’s a step-by-step guide:
 ![](./images/pubmed-crawler_image.jpg)
 
 
-### 2.4 Optional: Download PMC Articles
+<!-- ### 2.4 Optional: Download PMC Articles
 If your results have PMC IDs, you can auto-download full texts:
 ```bash
 cd ./script
 python main.py -d "../output/your_project_name/PubMed_xxx.xlsx"
 ```
-- Replace `../output/your_project_name/PubMed_xxx.xlsx` with the actual path of your scraped Excel file. Articles will be downloaded to the same folder as the Excel file.
+- Replace `../output/your_project_name/PubMed_xxx.xlsx` with the actual path of your scraped Excel file. Articles will be downloaded to the same folder as the Excel file. -->
 
 
 ## 3. Update Plan

@@ -80,13 +80,13 @@
 #### 示例图片
 ![](../images/pubmed-crawler_image.jpg)
 
-### 2.4 可选操作：下载 PMC 文献
+<!-- ### 2.4 可选操作：下载 PMC 文献
 如果爬取结果里有 PMC 编号，还能自动下载文献全文：
 ```bash
 cd ./script
 python main.py -d "../output/你的项目名/PubMed_xxx.xlsx"
 ```
-- 把 `../output/你的项目名/PubMed_xxx.xlsx` 换成你实际爬取生成的 Excel 路径，文献会自动下载到 Excel 所在的文件夹里～
+- 把 `../output/你的项目名/PubMed_xxx.xlsx` 换成你实际爬取生成的 Excel 路径，文献会自动下载到 Excel 所在的文件夹里～ -->
 
 
 ## 三、更新计划
