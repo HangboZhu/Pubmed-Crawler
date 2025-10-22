@@ -1,6 +1,6 @@
 ## 1. Introduction
 Hey there! This project is designed to help you **scrape search results from Pubmed** and automatically organize them into **structured text** (like Excel spreadsheets). It’s super handy for literature analysis and screening—no more manual copy-pasting!
-
+![](./images/Gemini_Generated_Image_qalaifqalaifqala.png)
 For Chinese user, Please Refer to [this](./Doc/README.md)
 
 This project is modified from [pubmed_get](https://github.com/PiaoyangGuohai1/pubmed_get). A big thanks to the original author for their open-source contribution!

@@ -3,7 +3,7 @@
 
 本项目基于 [pubmed_get](https://github.com/PiaoyangGuohai1/pubmed_get) 修改开发，特别感谢原项目作者的开源贡献！
 
-
+![](../images/Gemini_Generated_Image_qalaifqalaifqala.png)
 ### 1.1 结构化文本包含的字段
 最终输出的表格会涵盖这些关键信息，帮你把文献信息抓得明明白白：
 - Title：文献标题
