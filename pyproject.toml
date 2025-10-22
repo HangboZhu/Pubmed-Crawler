@@ -1,0 +1,19 @@
+[project]
+name = "pubmed-get-uv"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "aiohttp>=3.13.1",
+    "argparse>=1.4.0",
+    "bs4>=0.0.2",
+    "datetime>=5.5",
+    "eventlet>=0.40.3",
+    "openpyxl>=3.1.5",
+    "pandas>=2.3.3",
+    "requests>=2.32.5",
+    "scihub-cn>=0.1.1",
+    "setuptools>=80.9.0",
+    "urllib3>=2.5.0",
+]
