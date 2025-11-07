@@ -65,7 +65,7 @@ It only takes one command! Here’s how:
 
 2. Run the scraping command:
    ```bash
-   python main.py -u $url -o your_project_name
+   python main.py -u $url -o your_project_name -n your_keywords
    ```
 
    - Explanations:
