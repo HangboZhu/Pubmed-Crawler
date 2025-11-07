@@ -10,33 +10,44 @@ from translator import *
 from prepare import *
 from pdf_download import *
 
-def main(url, translate, appid, appkey, apispeed, download, output):
+def main(url, translate, appid, appkey, apispeed, download, output, name):
     if url:
         if "format=abstract" not in url:
             print("URL format is incorrect. Please switch to abstract URL format.")
             return
+
+        # 处理输出目录名称：优先使用 -o，然后是 -d，最后是随机生成
         if not output:
-            rd=random.randint(1000,9999)
-            output=f'project_{rd}'
+            if download and not download.endswith('.xlsx'):
+                # 如果 -d 参数看起来像文件夹名（不以.xlsx结尾），则用作输出目录
+                output = download
+                download = None  # 清空download参数，避免混淆
+            else:
+                rd=random.randint(1000,9999)
+                output=f'project_{rd}'
         out_dir = f"../output/{output}"
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
         print(f"The results file save in :{out_dir}")
-        
-        # Prepare J_Medline file     
+
+        # Prepare J_Medline file
         if not os.path.exists("../data/J_Medline.csv"):
             J_Med_download()
-        
-        # 构造输出
-        today=datetime.date.today()
-        # formatted_today=today.strftime('%y%m%d')
 
-        keywords = re.search(r"term=(.*)", url).group(1)
-        keywords = re.sub(r"\d+", "", keywords)
-        keywords = re.sub(r"[^\w\s]", "", keywords).replace(" ", "_")
-        print(f"Search Keywor：{keywords}")
+        # 构造输出文件名
+        if name:
+            # 确保文件名以.xlsx结尾
+            if not name.endswith('.xlsx'):
+                name = name + '.xlsx'
+            xlsx_name = name
+        else:
+            # 默认使用关键词命名
+            keywords = re.search(r"term=(.*)", url).group(1)
+            keywords = re.sub(r"\d+", "", keywords)
+            keywords = re.sub(r"[^\w\s]", "", keywords).replace(" ", "_")
+            print(f"Search Keywords：{keywords}")
+            xlsx_name = f"PubMed_{keywords}.xlsx"
 
-        xlsx_name = f"PubMed_{keywords}.xlsx"
         xlsx_path = f"{out_dir}/{xlsx_name}"
         
         # Extract articles from PubMed
@@ -81,8 +92,10 @@ if __name__ == "__main__":
     parser.add_argument('--appid', type=str, help='The appid for translation.')
     parser.add_argument('--appkey', type=str, help='The appkey for translation.')
     parser.add_argument('--apispeed', type=float, default=1, help='api call frequency, the default value is 1 (once call per second). If you are a senior user, set it to 10.')
-    parser.add_argument('-o','--output', type=str, help='which floder you want to save the result.')
-    parser.add_argument('-d' ,'--download', type=str, help='which file you want to download.')
-    
+    parser.add_argument('-o','--output', type=str, help='which folder you want to save the result.')
+    parser.add_argument('-d' ,'--download', type=str, help='which file you want to download. Also works as output folder name.')
+    parser.add_argument('--output-folder', type=str, help='Alternative way to specify output folder name.')
+    parser.add_argument('-n','--name', type=str, help='Custom Excel file name (e.g., out.xlsx). If not specified, use search keywords.')
+
     args = parser.parse_args()
-    main(args.url, args.translate, args.appid, args.appkey, args.apispeed, args.download, args.output)
+    main(args.url, args.translate, args.appid, args.appkey, args.apispeed, args.download, args.output, args.name)
