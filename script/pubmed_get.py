@@ -10,17 +10,30 @@ requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 # 定义日期转换
 def convert_date(date_string):
     match = re.search(r"(\d{4})(?: (\w{3})(?: (\d{1,2}))?)?", date_string)
+    # print(f"Original date string: {date_string}")
+    # print(f"Converting date: {match}")
     if match:
         year, month, day = match.groups()
         if month:
             month_dict = {v: k for k, v in enumerate(calendar.month_abbr)}
-            month = month_dict[month]
+            # print(f"Converting month: {month}")
+            # 获取月份，未找到则返回"Unknown"
+            month = month_dict.get(month, "Unknown")
+            # 若月份为"Unknown"，直接返回
+            if month == "Unknown":
+                return "Unknown"
             day = day if day else "01"
             return f"{year}-{month:02d}-{day.zfill(2)}"
         else:
             return year
     else:
         return "Unknown"
+
+import requests
+import pandas as pd
+from bs4 import BeautifulSoup
+import re  # 确保导入re（如果convert_date用到的话）
+
 
 def extract_articles(url, page_start=1):
     data = []
@@ -41,10 +54,25 @@ def extract_articles(url, page_start=1):
         for count, article in enumerate(articles, 1):
             # 提取标题、期刊等基础信息（保持不变，因为它们都在 article-overview 内部）
             title = article.find("h1", {"class": "heading-title"}).text.strip()
-            journal_abbreviation = article.find("span", {"class": "citation-journal"}).text.strip()
+            print("Processing article:", title)
+            # journal_abbreviation = article.find("span", {"class": "citation-journal"}).text.strip()
+            journal_abbreviation_element = article.find("span", {"class": "citation-journal"})
+            if journal_abbreviation_element:
+                journal_abbreviation = journal_abbreviation_element.text.strip()
+            else:
+                journal_abbreviation = "Unknown, Please check manually"
+            # print("Raw journal abbreviation:", journal_abbreviation)
             if journal_abbreviation.endswith('.'):
                 journal_abbreviation = journal_abbreviation[:-1]
-            publication_date = article.find("span", {"class": "cit"}).text.split(";")[0].strip()
+            # publication_date = article.find("span", {"class": "cit"}).text.split(";")[0].strip()
+            pub_date_element = article.find("span", {"class": "cit"})
+            if pub_date_element:
+                publication_date = pub_date_element.text.split(";")[0].strip()
+            else:
+                publication_date = "Unknown, Please check manually"
+            # print("Processing article", count, "on page", page)
+            # print("Raw publication date:", publication_date)
+            
             publication_date = convert_date(publication_date) # 假设 convert_date 已定义
             
             try:
@@ -115,7 +143,7 @@ def merge_dataframes(df):
     
     df.drop(columns=['MedAbbr'], inplace=True)
     
-    df_jcr = pd.read_csv('../data/2022-2023IF.csv', usecols=['journal_name', 'category',"if_2023", 'if_2022'])
+    df_jcr = pd.read_csv('../data/2022-2024IF.csv', usecols=['journal_name', 'category',"if_2023", 'if_2022', 'if_2024'])
     
     regex_pattern = r"\((Q[1-4])\)$"
 

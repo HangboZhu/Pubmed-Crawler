@@ -94,5 +94,5 @@ python main.py -d "../output/your_project_name/PubMed_xxx.xlsx"
 
 ## 3. Update Plan
 We’ll keep optimizing the project. The confirmed plan so far:
-- Add **2025 Journal Impact Factor** data (Note: This data is only accessible/usable in Mainland China)
+> - Add **2025 Journal Impact Factor** data (Note: This data is only accessible/usable in Mainland China) ==> Already Finished~~~
 - Future features may include more category info, faster batch translation, etc.—based on user needs. Stay tuned!
