@@ -4,6 +4,12 @@ Hey there! This project is designed to help you **scrape search results from Pub
 ![](./images/Gemini_Generated_Image_qalaifqalaifqala.png)
 For Chinese user, Please Refer to [this](./Doc/README.md)
 
+> 2025.12.14
+Making Download Paper Possible, Code Metric Please Refer to [this](./Doc/PMC_Download.md)
+
+
+
+
 This project is modified from [pubmed_get](https://github.com/PiaoyangGuohai1/pubmed_get). A big thanks to the original author for their open-source contribution!
 
 
@@ -72,6 +78,19 @@ It only takes one command! Here’s how:
      - `$url`: Must be the **abstract page link** from your Pubmed search (not the homepage or list page!)
      - `-o your_project_name`: Name your scraping task (e.g., "gut_kidney_axis_2023-2025"). Results will be saved in `output/your_project_name`.
 
+3. Run the scraping and Donwload PDF from PMC
+```
+python main.py -u $url \ # # For Scrapting
+               -o your_project_name \ # For Scrapting
+                --download_dir $download_dir \ # For downloading
+                --error_download_paper failed_downloads.txt \# For downloading
+# Example Use
+python main.py -u https://pubmed.ncbi.nlm.nih.gov/\?term\=Multi-Modal+prune\&sort\=jour\&format\=abstract\&size\=20 \
+  -o multi_model_prune \
+  --download_dir ./download/multi_modal \
+  --error_download_paper failed_downloads.txt
+```
+
 
 ### 2.3 Key: How to Get $url (Pubmed Abstract Page Link)
 Many people mix up the link at first—here’s a step-by-step guide:
@@ -95,4 +114,5 @@ python main.py -d "../output/your_project_name/PubMed_xxx.xlsx"
 ## 3. Update Plan
 We’ll keep optimizing the project. The confirmed plan so far:
 > - Add **2025 Journal Impact Factor** data (Note: This data is only accessible/usable in Mainland China) ==> Already Finished~~~
+> - Add  **Making Download From PMC** Possible ==> Already Finished~~~ 
 - Future features may include more category info, faster batch translation, etc.—based on user needs. Stay tuned!

@@ -10,7 +10,8 @@ from translator import *
 from prepare import *
 from pdf_download import *
 
-def main(url, translate, appid, appkey, apispeed, download, output, name):
+# 1. 在函数定义中加回 download 参数
+def main(url, translate, appid, appkey, apispeed, output, name, download_dir, error_download_paper, download):
     if url:
         if "format=abstract" not in url:
             print("URL format is incorrect. Please switch to abstract URL format.")
@@ -18,13 +19,14 @@ def main(url, translate, appid, appkey, apispeed, download, output, name):
 
         # 处理输出目录名称：优先使用 -o，然后是 -d，最后是随机生成
         if not output:
+            # 2. 这里使用了 download，所以参数里必须有它
             if download and not download.endswith('.xlsx'):
-                # 如果 -d 参数看起来像文件夹名（不以.xlsx结尾），则用作输出目录
                 output = download
-                download = None  # 清空download参数，避免混淆
+                download = None 
             else:
                 rd=random.randint(1000,9999)
                 output=f'project_{rd}'
+        
         out_dir = f"../output/{output}"
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
@@ -36,15 +38,18 @@ def main(url, translate, appid, appkey, apispeed, download, output, name):
 
         # 构造输出文件名
         if name:
-            # 确保文件名以.xlsx结尾
             if not name.endswith('.xlsx'):
                 name = name + '.xlsx'
             xlsx_name = name
         else:
-            # 默认使用关键词命名
-            keywords = re.search(r"term=(.*)", url).group(1)
-            keywords = re.sub(r"\d+", "", keywords)
-            keywords = re.sub(r"[^\w\s]", "", keywords).replace(" ", "_")
+            try:
+                keywords = re.search(r"term=(.*)", url).group(1)
+                keywords = re.sub(r"\d+", "", keywords)
+                keywords = re.sub(r"[^\w\s]", "", keywords).replace(" ", "_")
+                if "&" in keywords:
+                    keywords = keywords.split("&")[0]
+            except:
+                keywords = "result"
             print(f"Search Keywords：{keywords}")
             xlsx_name = f"PubMed_{keywords}.xlsx"
 
@@ -52,7 +57,6 @@ def main(url, translate, appid, appkey, apispeed, download, output, name):
         
         # Extract articles from PubMed
         df = extract_articles(url)
-        # df.to_csv(f"{out_dir}/raw_pubmed_data.csv", index=False, quoting=csv.QUOTE_ALL)
         
         # Gain JCR Category and IF
         df = merge_dataframes(df)
@@ -63,39 +67,47 @@ def main(url, translate, appid, appkey, apispeed, download, output, name):
         
         # 输出合并后的DataFrame
         df.to_excel(xlsx_path, index=False)
+        print(f"Excel saved to {xlsx_path}")
+        
+        # === 下载逻辑 ===
+        if download_dir:
+            print("\n" + "="*30)
+            print("Start processing PDF downloads...")
+            
+            # 路径处理：支持相对路径
+            if not os.path.isabs(download_dir) and not download_dir.startswith('.'):
+                 download_dir = os.path.join(out_dir, download_dir)
+
+            if not os.path.exists(download_dir):
+                os.makedirs(download_dir)
+            
+            if not error_download_paper:
+                error_download_paper = os.path.join(out_dir, "failed_downloads.txt")
+                
+            batch_download_scihub(df, download_dir, error_download_paper)
+            
+            print("="*30 + "\n")
                     
-    
-    # 从PMC下载文件
-    # if download:
-    #     out_dir = os.path.dirname(download)
-    #     df = pd.read_excel(download)
-        
-    #     print("从PMC数据库下载文献。。。。")
-    #     pmc_get(df, out_dir)
-
-        # 有点问题，后面补
-        #print("剩余文献需要从scihub中下载，由于下载速度过慢，此处不进行")
-        #print("此处只提取下载链接，到df的PMC列中")
-        #scihub_get(df, download)
-        
-    
-    
     print("程序结束!")
-    
-    
 
-    
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser = argparse.ArgumentParser(description='PubMed Crawler')
     parser.add_argument('-u', '--url', type=str, help='The web URL to be processed.')
     parser.add_argument('-t', '--translate', action='store_true', help='Whether to translate the text.')
     parser.add_argument('--appid', type=str, help='The appid for translation.')
     parser.add_argument('--appkey', type=str, help='The appkey for translation.')
-    parser.add_argument('--apispeed', type=float, default=1, help='api call frequency, the default value is 1 (once call per second). If you are a senior user, set it to 10.')
+    parser.add_argument('--apispeed', type=float, default=1, help='api call frequency')
     parser.add_argument('-o','--output', type=str, help='which folder you want to save the result.')
-    parser.add_argument('-d' ,'--download', type=str, help='which file you want to download. Also works as output folder name.')
     parser.add_argument('--output-folder', type=str, help='Alternative way to specify output folder name.')
-    parser.add_argument('-n','--name', type=str, help='Custom Excel file name (e.g., out.xlsx). If not specified, use search keywords.')
+    parser.add_argument('-n','--name', type=str, help='Custom Excel file name')
+    
+    # 3. 恢复 -d 参数，防止报错
+    parser.add_argument('-d', '--download', type=str, help='Legacy download parameter')
+    
+    parser.add_argument('--download_dir', type=str, help='Directory to save downloaded PDFs.')
+    parser.add_argument('--error_download_paper', type=str, help='File path to save failed PMIDs.')
 
     args = parser.parse_args()
-    main(args.url, args.translate, args.appid, args.appkey, args.apispeed, args.download, args.output, args.name)
+    # 4. 传参时包含 download
+    main(args.url, args.translate, args.appid, args.appkey, args.apispeed, 
+         args.output, args.name, args.download_dir, args.error_download_paper, args.download)
