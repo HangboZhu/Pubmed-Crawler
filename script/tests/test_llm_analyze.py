@@ -1,6 +1,8 @@
+import pandas as pd
 import pytest
+from unittest.mock import MagicMock
 
-from llm_analyze import load_config, NEW_COLUMNS
+from llm_analyze import load_config, analyze_article, analyze_df, NEW_COLUMNS
 
 
 @pytest.fixture(autouse=True)
@@ -10,6 +12,27 @@ def _clean_llm_env(monkeypatch):
     for key in ("BASE_URL", "API_KEY", "MODEL"):
         monkeypatch.delenv(key, raising=False)
 
+
+def _fake_client(content):
+    """构造一个返回指定 content 的 mock OpenAI client。"""
+    client = MagicMock()
+    message = MagicMock()
+    message.content = content
+    choice = MagicMock()
+    choice.message = message
+    client.chat.completions.create.return_value = MagicMock(choices=[choice])
+    return client
+
+
+def _sample_df():
+    return pd.DataFrame({
+        "Title": ["T1", "T2", "T3"],
+        "Abstract": ["A1", "A2", "A3"],
+        "category": ["Q1", "Q2", "Q1"],
+    })
+
+
+# ---- load_config ----
 
 def test_load_config_success(tmp_path):
     env = tmp_path / ".env"
@@ -31,21 +54,7 @@ def test_new_columns_constant():
     assert NEW_COLUMNS == ["标题翻译", "摘要翻译", "中文总结", "创新点"]
 
 
-from unittest.mock import MagicMock
-
-from llm_analyze import analyze_article
-
-
-def _fake_client(content):
-    """构造一个返回指定 content 的 mock OpenAI client。"""
-    client = MagicMock()
-    message = MagicMock()
-    message.content = content
-    choice = MagicMock()
-    choice.message = message
-    client.chat.completions.create.return_value = MagicMock(choices=[choice])
-    return client
-
+# ---- analyze_article ----
 
 def test_analyze_article_parses_json():
     client = _fake_client('{"标题翻译":"T","摘要翻译":"A","中文总结":"S","创新点":"I"}')
@@ -62,36 +71,27 @@ def test_analyze_article_empty_input_returns_none():
 def test_analyze_article_retry_then_fail_returns_none():
     client = MagicMock()
     client.chat.completions.create.side_effect = Exception("boom")
+    # max_retries=1 → 初始 1 次 + 重试 1 次 = 共 2 次调用后返回 None
     assert analyze_article("t", "a", client=client, model="m", max_retries=1) is None
+    assert client.chat.completions.create.call_count == 2
 
 
-import pandas as pd
+def test_analyze_article_retry_then_success():
+    # 首次抛异常，重试返回正常 JSON
+    client = _fake_client('{"标题翻译":"T","摘要翻译":"A","中文总结":"S","创新点":"I"}')
+    client.chat.completions.create.side_effect = [
+        Exception("transient"),
+        client.chat.completions.create.return_value,
+    ]
+    r = analyze_article("t", "a", client=client, model="m", max_retries=1)
+    assert r == {"标题翻译": "T", "摘要翻译": "A", "中文总结": "S", "创新点": "I"}
+    assert client.chat.completions.create.call_count == 2
 
-from llm_analyze import analyze_df
 
-
-def _sample_df():
-    return pd.DataFrame({
-        "Title": ["T1", "T2", "T3"],
-        "Abstract": ["A1", "A2", "A3"],
-        "category": ["Q1", "Q2", "Q1"],
-    })
-
-
-def _client_returning(content):
-    client = MagicMock()
-    message = MagicMock()
-    message.content = content
-    choice = MagicMock()
-    choice.message = message
-    client.chat.completions.create.return_value = MagicMock(choices=[choice])
-    return client
-
+# ---- analyze_df ----
 
 def test_analyze_df_only_processes_q1():
-    client = _client_returning(
-        '{"标题翻译":"x","摘要翻译":"y","中文总结":"z","创新点":"w"}'
-    )
+    client = _fake_client('{"标题翻译":"x","摘要翻译":"y","中文总结":"z","创新点":"w"}')
     df = analyze_df(_sample_df(), client=client, model="m")
     # Q1 行被填充
     assert df.loc[0, "标题翻译"] == "x"
@@ -109,3 +109,13 @@ def test_analyze_df_failed_article_leaves_blank():
     df = analyze_df(_sample_df(), client=client, model="m")
     # Q1 行因失败而留空，但不报错
     assert df.loc[0, "标题翻译"] == ""
+
+
+def test_analyze_df_skips_when_no_category_column():
+    # 缺 category 列时跳过 LLM 分析，不报错，client 从未被调用
+    df = pd.DataFrame({"Title": ["T1"], "Abstract": ["A1"]})
+    client = MagicMock()
+    result = analyze_df(df, client=client, model="m")
+    assert client.chat.completions.create.called is False
+    for col in NEW_COLUMNS:
+        assert col in result.columns

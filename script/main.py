@@ -99,7 +99,7 @@ def main(url, translate, output, name, download_dir, error_download_paper, downl
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PubMed Crawler')
     parser.add_argument('-u', '--url', type=str, help='The web URL to be processed.')
-    parser.add_argument('-t', '--translate', action='store_true', help='Whether to translate the text.')
+    parser.add_argument('-t', '--translate', action='store_true', help='Enable LLM analysis (title/abstract translation, summary, innovation points).')
     parser.add_argument('-o','--output', type=str, help='which folder you want to save the result.')
     parser.add_argument('--output-folder', type=str, help='Alternative way to specify output folder name.')
     parser.add_argument('-n','--name', type=str, help='Custom Excel file name')
