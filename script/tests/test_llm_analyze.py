@@ -29,3 +29,37 @@ def test_load_config_missing_key(tmp_path):
 
 def test_new_columns_constant():
     assert NEW_COLUMNS == ["标题翻译", "摘要翻译", "中文总结", "创新点"]
+
+
+from unittest.mock import MagicMock
+
+from llm_analyze import analyze_article
+
+
+def _fake_client(content):
+    """构造一个返回指定 content 的 mock OpenAI client。"""
+    client = MagicMock()
+    message = MagicMock()
+    message.content = content
+    choice = MagicMock()
+    choice.message = message
+    client.chat.completions.create.return_value = MagicMock(choices=[choice])
+    return client
+
+
+def test_analyze_article_parses_json():
+    client = _fake_client('{"标题翻译":"T","摘要翻译":"A","中文总结":"S","创新点":"I"}')
+    r = analyze_article("Title", "Abstract", client=client, model="m")
+    assert r == {"标题翻译": "T", "摘要翻译": "A", "中文总结": "S", "创新点": "I"}
+
+
+def test_analyze_article_empty_input_returns_none():
+    client = _fake_client("{}")
+    assert analyze_article("", "abs", client=client, model="m") is None
+    assert analyze_article("t", "", client=client, model="m") is None
+
+
+def test_analyze_article_retry_then_fail_returns_none():
+    client = MagicMock()
+    client.chat.completions.create.side_effect = Exception("boom")
+    assert analyze_article("t", "a", client=client, model="m", max_retries=1) is None

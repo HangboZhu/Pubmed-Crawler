@@ -44,3 +44,38 @@ def load_config(env_path=None):
     if missing:
         raise RuntimeError(f".env 缺少配置项: {', '.join(missing)}")
     return base_url, api_key, model
+
+
+def _build_client():
+    """读取配置并构造 OpenAI 兼容 client。"""
+    base_url, api_key, model = load_config()
+    return OpenAI(base_url=base_url, api_key=api_key), model
+
+
+def analyze_article(title, abstract, client=None, model=None, max_retries=1):
+    """分析单篇文献，返回 dict；失败或空输入返回 None。"""
+    if not title or not abstract:
+        return None
+    if client is None or model is None:
+        client, model = _build_client()
+
+    user_msg = USER_PROMPT_TEMPLATE.format(title=title, abstract=abstract)
+    last_err = None
+    for _ in range(max_retries + 1):
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_msg},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.3,
+            )
+            content = resp.choices[0].message.content
+            return json.loads(content)
+        except Exception as e:  # noqa: BLE001 - 重试并最终降级为 None
+            last_err = e
+            continue
+    print(f"[WARN] 分析失败，跳过: {title[:40]}... | 原因: {last_err}")
+    return None
