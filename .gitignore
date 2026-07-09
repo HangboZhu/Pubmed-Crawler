@@ -1,0 +1,13 @@
+script/__pycache__/*310*.pyc
+
+script/test*.py
+
+CLAUDE.md
+
+
+.*
+
+output/*
+
+__pycache__/
+

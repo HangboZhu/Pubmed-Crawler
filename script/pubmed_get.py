@@ -177,7 +177,7 @@ def merge_dataframes(df):
     if not os.path.exists(jcr_path):
         print(f"Warning: {jcr_path} not found. Trying raw file...")
         jcr_path = '../data/2025年最新JCR完整版.xlsx'
-        df_jcr = pd.read_exc(jcr_path)
+        df_jcr = pd.read_excel(jcr_path)
         # 临时改名以匹配逻辑
         df_jcr.rename(columns={'Journal Name': 'journal_name', 'JIF Quartile': 'category', 'JIF 2024': 'if_2024'}, inplace=True)
     else:
