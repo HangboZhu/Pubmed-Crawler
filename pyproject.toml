@@ -10,10 +10,20 @@ dependencies = [
     "bs4>=0.0.2",
     "datetime>=5.5",
     "eventlet>=0.40.3",
+    "jinja2>=3.1.6",
+    "openai>=2.44.0",
     "openpyxl>=3.1.5",
     "pandas>=2.3.3",
+    "python-dotenv>=1.2.2",
     "requests>=2.32.5",
     "scihub-cn>=0.1.1",
+    "selenium>=4.45.0",
     "setuptools>=80.9.0",
     "urllib3>=2.5.0",
+    "webdriver-manager>=4.1.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
 ]
