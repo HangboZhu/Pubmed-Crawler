@@ -63,3 +63,49 @@ def test_analyze_article_retry_then_fail_returns_none():
     client = MagicMock()
     client.chat.completions.create.side_effect = Exception("boom")
     assert analyze_article("t", "a", client=client, model="m", max_retries=1) is None
+
+
+import pandas as pd
+
+from llm_analyze import analyze_df
+
+
+def _sample_df():
+    return pd.DataFrame({
+        "Title": ["T1", "T2", "T3"],
+        "Abstract": ["A1", "A2", "A3"],
+        "category": ["Q1", "Q2", "Q1"],
+    })
+
+
+def _client_returning(content):
+    client = MagicMock()
+    message = MagicMock()
+    message.content = content
+    choice = MagicMock()
+    choice.message = message
+    client.chat.completions.create.return_value = MagicMock(choices=[choice])
+    return client
+
+
+def test_analyze_df_only_processes_q1():
+    client = _client_returning(
+        '{"标题翻译":"x","摘要翻译":"y","中文总结":"z","创新点":"w"}'
+    )
+    df = analyze_df(_sample_df(), client=client, model="m")
+    # Q1 行被填充
+    assert df.loc[0, "标题翻译"] == "x"
+    assert df.loc[2, "中文总结"] == "z"
+    # Q2 行保持空
+    assert df.loc[1, "标题翻译"] == ""
+    # 四列都存在
+    for col in NEW_COLUMNS:
+        assert col in df.columns
+
+
+def test_analyze_df_failed_article_leaves_blank():
+    client = MagicMock()
+    client.chat.completions.create.side_effect = Exception("boom")
+    df = analyze_df(_sample_df(), client=client, model="m")
+    # Q1 行因失败而留空，但不报错
+    assert df.loc[0, "标题翻译"] == ""

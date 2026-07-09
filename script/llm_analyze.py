@@ -79,3 +79,37 @@ def analyze_article(title, abstract, client=None, model=None, max_retries=1):
             continue
     print(f"[WARN] 分析失败，跳过: {title[:40]}... | 原因: {last_err}")
     return None
+
+
+def analyze_df(df, client=None, model=None):
+    """对 category=='Q1' 的行调用 LLM，填充 4 个新列。"""
+    for col in NEW_COLUMNS:
+        if col not in df.columns:
+            df[col] = ""
+
+    own_client = client is None
+    if own_client:
+        try:
+            client, model = _build_client()
+        except RuntimeError as e:
+            print(f"[ERROR] 无法加载 LLM 配置，跳过翻译: {e}")
+            return df
+
+    if "category" not in df.columns:
+        print("[WARN] 缺少 category 列，跳过 LLM 分析。")
+        return df
+
+    q1 = df[df["category"] == "Q1"]
+    total = len(q1)
+    print(f"开始分析 {total} 篇 Q1 文献...")
+
+    for i, (index, row) in enumerate(q1.iterrows(), 1):
+        title = row.get("Title", "") or ""
+        abstract = row.get("Abstract", "") or ""
+        print(f"[{i}/{total}] {title[:50]}")
+        result = analyze_article(title, abstract, client=client, model=model)
+        for col in NEW_COLUMNS:
+            df.at[index, col] = result.get(col, "") if result else ""
+
+    print("LLM 分析完成。")
+    return df
