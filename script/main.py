@@ -6,12 +6,13 @@ import datetime
 import csv
 import random
 from pubmed_get import *
-from translator import * 
 from prepare import *
 from pdf_download import *
+from llm_analyze import analyze_df
+from html_report import generate_html
 
 # 1. 在函数定义中加回 download 参数
-def main(url, translate, appid, appkey, apispeed, output, name, download_dir, error_download_paper, download):
+def main(url, translate, output, name, download_dir, error_download_paper, download):
     if url:
         if "format=abstract" not in url:
             print("URL format is incorrect. Please switch to abstract URL format.")
@@ -61,13 +62,18 @@ def main(url, translate, appid, appkey, apispeed, output, name, download_dir, er
         # Gain JCR Category and IF
         df = merge_dataframes(df)
         
-        # 翻译
+        # LLM 分析（翻译/总结/创新点）
         if translate:
-            df = translate_df(df, appid, appkey, apispeed)
+            df = analyze_df(df)
         
         # 输出合并后的DataFrame
         df.to_excel(xlsx_path, index=False)
         print(f"Excel saved to {xlsx_path}")
+
+        # 生成 HTML 阅读视图
+        html_path = xlsx_path.replace(".xlsx", ".html")
+        generate_html(df, html_path)
+        print(f"HTML saved to {html_path}")
         
         # === 下载逻辑 ===
         if download_dir:
@@ -94,9 +100,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PubMed Crawler')
     parser.add_argument('-u', '--url', type=str, help='The web URL to be processed.')
     parser.add_argument('-t', '--translate', action='store_true', help='Whether to translate the text.')
-    parser.add_argument('--appid', type=str, help='The appid for translation.')
-    parser.add_argument('--appkey', type=str, help='The appkey for translation.')
-    parser.add_argument('--apispeed', type=float, default=1, help='api call frequency')
     parser.add_argument('-o','--output', type=str, help='which folder you want to save the result.')
     parser.add_argument('--output-folder', type=str, help='Alternative way to specify output folder name.')
     parser.add_argument('-n','--name', type=str, help='Custom Excel file name')
@@ -108,6 +111,8 @@ if __name__ == "__main__":
     parser.add_argument('--error_download_paper', type=str, help='File path to save failed PMIDs.')
 
     args = parser.parse_args()
+    # 合并输出目录：-o 优先，其次 --output-folder
+    output = args.output or args.output_folder
     # 4. 传参时包含 download
-    main(args.url, args.translate, args.appid, args.appkey, args.apispeed, 
-         args.output, args.name, args.download_dir, args.error_download_paper, args.download)
+    main(args.url, args.translate, output, args.name,
+         args.download_dir, args.error_download_paper, args.download)
