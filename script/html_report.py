@@ -124,7 +124,7 @@ def generate_html(df, output_path):
     has_llm = all(col in df.columns for col in ["标题翻译", "摘要翻译", "中文总结", "创新点"])
     q1_count = int((df["category"] == "Q1").sum()) if "category" in df.columns else 0
 
-    html = Template(HTML_TEMPLATE).render(
+    html = Template(HTML_TEMPLATE, autoescape=True).render(
         records=records,
         has_llm=has_llm,
         total=len(records),

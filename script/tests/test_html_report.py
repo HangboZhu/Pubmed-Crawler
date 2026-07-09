@@ -52,3 +52,13 @@ def test_generate_html_empty_df(tmp_path):
     out = tmp_path / "r.html"
     generate_html(pd.DataFrame(), str(out))
     assert os.path.exists(str(out))
+
+
+def test_generate_html_escapes_special_chars(tmp_path):
+    df = _df_without_llm()
+    df.loc[0, "Abstract"] = "Result: p < 0.05 and A & B group"
+    out = tmp_path / "r.html"
+    generate_html(df, str(out))
+    html = out.read_text(encoding="utf-8")
+    assert "p &lt; 0.05" in html
+    assert "A &amp; B" in html
