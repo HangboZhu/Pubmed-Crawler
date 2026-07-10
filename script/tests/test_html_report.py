@@ -1,4 +1,5 @@
 import os
+import re
 
 import pandas as pd
 
@@ -133,3 +134,17 @@ def test_generate_html_embeds_records_for_export(tmp_path):
     assert "const RECORDS" in html
     # 导出按钮
     assert 'id="export-csv"' in html
+
+
+def test_generated_script_block_is_valid_js(tmp_path):
+    # 根因回归：HTML_TEMPLATE 内 JS 的 \n 必须保留为字面转义（反斜杠+n），
+    # 不能被 Python 普通三引号字符串吞成真换行符。否则正则字面量 /[",\n]/
+    # 与字符串 '\n' 会跨行 → 整段 <script> 语法错误 → 收藏星等交互全部失效。
+    out = tmp_path / "r.html"
+    generate_html(_df_without_llm(), str(out))
+    html = out.read_text(encoding="utf-8")
+    script = re.search(r"<script>([\s\S]*?)</script>", html).group(1)
+    # escCsv 正则里的换行必须是 JS 转义字面 \n，而非真换行
+    assert r'return /[",\n]/.test(v)' in script, "正则 \\n 被 Python 转成真换行，script 语法错误"
+    # CSV 拼接换行同理
+    assert r"lines.join('\n')" in script, "字符串 \\n 被 Python 转成真换行，script 语法错误"

@@ -3,7 +3,7 @@ import os
 import pandas as pd
 from jinja2 import Template
 
-HTML_TEMPLATE = """<!DOCTYPE html>
+HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="utf-8">
