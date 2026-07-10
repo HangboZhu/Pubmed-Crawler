@@ -1,16 +1,21 @@
 import os
 import pandas as pd
 
+# 项目根目录 = script/ 的上一级；用绝对路径避免依赖运行时 cwd
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+
+
 def J_Med_download():
-    # 定义路径
-    csv_path = "../data/J_Medline.csv"
-    txt_path = "../data/J_Medline.txt"
+    # 定义路径（基于项目根，不依赖运行时 cwd）
+    csv_path = os.path.join(DATA_DIR, "J_Medline.csv")
+    txt_path = os.path.join(DATA_DIR, "J_Medline.txt")
     url = "https://ftp.ncbi.nlm.nih.gov/pubmed/J_Medline.txt"
     
     # 定义列名
     columns = ["JrId", "JournalTitle", "MedAbbr", "ISSN (Print)", "ISSN (Online)", "IsoAbbr", "NlmId"]
 
-    # 确保 ../data 目录存在
+    # 确保 data 目录存在
     data_dir = os.path.dirname(csv_path)
     os.makedirs(data_dir, exist_ok=True)
 

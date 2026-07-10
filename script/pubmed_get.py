@@ -5,7 +5,11 @@ import calendar
 from urllib3.exceptions import InsecureRequestWarning 
 import pandas as pd
 import os
-requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning) 
+
+# 项目根目录 = script/ 的上一级；用绝对路径避免依赖运行时 cwd
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
 # 定义日期转换
 def convert_date(date_string):
@@ -164,19 +168,19 @@ def extract_articles(url, page_start=1):
 def merge_dataframes(df):
     # 1. 加载期刊缩写对照表 (保持不变)
     # 这一步是为了把 PubMed 爬取的 "Clin J Am Soc Nephrol" 转换为全称 "Clinical Journal of the American Society of Nephrology"
-    journal_df = pd.read_csv('../data/J_Medline.csv', usecols=['MedAbbr', 'JournalTitle'])
+    journal_df = pd.read_csv(os.path.join(DATA_DIR, 'J_Medline.csv'), usecols=['MedAbbr', 'JournalTitle'])
     df = df.merge(journal_df, left_on='Journal Abbreviation', right_on='MedAbbr', how='left')
     df.drop(columns=['MedAbbr'], inplace=True)
     
     # 2. 读取新的 IF 数据 (关键修改点)
     # 读取我们在上一步生成的清洗好的文件 JCR_2025_Ready.csv
     # 该文件应包含列: journal_name, quartile, if_2024
-    jcr_path = '../data/JCR_2025_Ready.csv'
+    jcr_path = os.path.join(DATA_DIR, 'JCR_2025_Ready.csv')
     
     # 如果没找到清洗文件，尝试直接读取原始 CSV (作为备选方案，防止报错)
     if not os.path.exists(jcr_path):
         print(f"Warning: {jcr_path} not found. Trying raw file...")
-        jcr_path = '../data/2025年最新JCR完整版.xlsx'
+        jcr_path = os.path.join(DATA_DIR, '2025年最新JCR完整版.xlsx')
         df_jcr = pd.read_excel(jcr_path)
         # 临时改名以匹配逻辑
         df_jcr.rename(columns={'Journal Name': 'journal_name', 'JIF Quartile': 'category', 'JIF 2024': 'if_2024'}, inplace=True)

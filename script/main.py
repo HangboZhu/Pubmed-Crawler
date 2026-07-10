@@ -11,9 +11,34 @@ from pdf_download import *
 from llm_analyze import analyze_df
 from html_report import generate_html
 
+# 项目根目录 = script/ 的上一级；用绝对路径避免依赖运行时 cwd（uv run 与 cd script 都能跑）
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output")
+
+
+def normalize_pubmed_url(url):
+    """规范化 PubMed URL：去反斜杠转义残留、自动补 format=abstract、清理首尾空格。
+    用户从终端粘贴的 URL 可能带 \? \= \& 等多余反斜杠，或缺少 format=abstract，
+    这里统一修正，避免在 main() 里被硬性检查直接拦下。"""
+    original = url
+    # 清理首尾空格 + 去掉反斜杠转义残留
+    url = url.strip().replace("\\", "")
+    # 缺少 format=abstract 时自动补上（PubMed 搜索 URL 一定有 ?，所以通常用 & 拼接）
+    if "format=abstract" not in url:
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}format=abstract"
+    # 发生改动时打印一行提示，方便用户察觉粘贴问题；URL 本就正确则静默
+    if url != original:
+        print(f"[INFO] URL auto-normalized: {url}")
+    return url
+
+
 # 1. 在函数定义中加回 download 参数
 def main(url, translate, output, name, download_dir, error_download_paper, download):
     if url:
+        # 规范化 URL：去反斜杠、补 format=abstract，让用户能直接粘贴原始搜索 URL
+        url = normalize_pubmed_url(url)
         if "format=abstract" not in url:
             print("URL format is incorrect. Please switch to abstract URL format.")
             return
@@ -28,13 +53,13 @@ def main(url, translate, output, name, download_dir, error_download_paper, downl
                 rd=random.randint(1000,9999)
                 output=f'project_{rd}'
         
-        out_dir = f"../output/{output}"
+        out_dir = os.path.join(OUTPUT_DIR, output)
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
         print(f"The results file save in :{out_dir}")
 
         # Prepare J_Medline file
-        if not os.path.exists("../data/J_Medline.csv"):
+        if not os.path.exists(os.path.join(DATA_DIR, "J_Medline.csv")):
             J_Med_download()
 
         # 构造输出文件名
