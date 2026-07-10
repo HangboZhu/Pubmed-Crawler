@@ -62,3 +62,32 @@ def test_generate_html_escapes_special_chars(tmp_path):
     html = out.read_text(encoding="utf-8")
     assert "p &lt; 0.05" in html
     assert "A &amp; B" in html
+
+
+def test_generate_html_has_data_category(tmp_path):
+    out = tmp_path / "r.html"
+    generate_html(_df_without_llm(), str(out))
+    html = out.read_text(encoding="utf-8")
+    assert 'data-category="Q1"' in html
+
+
+def test_generate_html_has_quartile_filter(tmp_path):
+    out = tmp_path / "r.html"
+    generate_html(_df_without_llm(), str(out))
+    html = out.read_text(encoding="utf-8")
+    assert 'id="quartile-toggle"' in html
+    assert 'class="quartile-cb"' in html
+    # Q1 复选框带计数
+    assert "Q1 (1)" in html
+
+
+def test_generate_html_uncategorized_option(tmp_path):
+    # 含未分类（category 为空）文献时，下拉应出现「未分类」项
+    df = pd.DataFrame({"Title": ["A", "B"], "category": ["Q1", None]})
+    out = tmp_path / "r.html"
+    generate_html(df, str(out))
+    html = out.read_text(encoding="utf-8")
+    assert "未分类" in html
+    # None/NaN → 空 data-category（不能渲染成 "nan"，否则未分类筛选失配）
+    assert 'data-category=""' in html
+    assert 'data-category="nan"' not in html

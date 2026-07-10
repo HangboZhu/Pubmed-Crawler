@@ -32,6 +32,13 @@ details summary{cursor:pointer;color:var(--muted);font-size:13px;}
 .links{margin-top:12px;font-size:13px;}
 .links a{color:var(--accent);text-decoration:none;margin-right:12px;}
 .empty{text-align:center;color:var(--muted);padding:40px;}
+.dropdown{position:relative;}
+.dropdown-menu{display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px;min-width:170px;box-shadow:0 4px 12px rgba(0,0,0,.12);z-index:20;}
+.dropdown-menu.open{display:block;}
+.dropdown-actions{display:flex;justify-content:space-between;gap:8px;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--border);font-size:12px;}
+.dropdown-actions a{color:var(--accent);text-decoration:none;cursor:pointer;}
+.dropdown-item{display:flex;align-items:center;gap:6px;padding:4px;font-size:13px;cursor:pointer;}
+.dropdown-item input{margin:0;}
 </style>
 </head>
 <body>
@@ -40,6 +47,24 @@ details summary{cursor:pointer;color:var(--muted);font-size:13px;}
     <input type="search" id="search" placeholder="搜索标题(中英文)...">
     <button id="sort-cite" class="sort-btn">按引用</button>
     <button id="sort-date" class="sort-btn">按日期</button>
+    {% if quartiles %}
+    <div class="dropdown">
+      <button id="quartile-toggle" class="sort-btn">按分区 ▾</button>
+      <div id="quartile-menu" class="dropdown-menu">
+        <div class="dropdown-actions">
+          <a href="#" id="quartile-all">全选</a>
+          <a href="#" id="quartile-none">清空</a>
+        </div>
+        {% for q in quartiles %}
+        <label class="dropdown-item">
+          <input type="checkbox" class="quartile-cb"
+                 data-key="{{ '' if q.uncategorized else q.name }}" checked>
+          <span>{{ q.name }} ({{ q.count }})</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
     <span class="stats" id="stats"></span>
   </div>
 </header>
@@ -48,7 +73,8 @@ details summary{cursor:pointer;color:var(--muted);font-size:13px;}
   <div class="card"
        data-title="{{ ((r.get('Title','') or '') ~ (r.get('标题翻译','') or '')) | lower }}"
        data-cite="{{ r.get('Citation Counts',0) or 0 }}"
-       data-date="{{ r.get('Publication Date','') or '' }}">
+       data-date="{{ r.get('Publication Date','') or '' }}"
+       data-category="{{ r.get('category','') or '' }}">
     <h2>{{ r.get('Title','') or '' }}</h2>
     {% if r.get('标题翻译') %}<div class="zh-title">{{ r['标题翻译'] }}</div>{% endif %}
     <div class="meta">
@@ -81,11 +107,19 @@ const cards = Array.from(document.querySelectorAll('.card'));
 const list = document.getElementById('list');
 const stats = document.getElementById('stats');
 const TOTAL = {{ total }}, Q1 = {{ q1_count }};
+const allCbs = Array.from(document.querySelectorAll('.quartile-cb'));
 let sortKey = null, sortDir = -1;
+// 当前选中的分区 key 集合（默认全选）
+let activeQuartiles = new Set(allCbs.map(cb => cb.dataset.key));
 
 function apply(){
   const q = document.getElementById('search').value.trim().toLowerCase();
-  let visible = cards.filter(c => !q || c.dataset.title.includes(q));
+  const filtering = q || activeQuartiles.size < allCbs.length;
+  let visible = cards.filter(c => {
+    const matchSearch = !q || c.dataset.title.includes(q);
+    const matchQuartile = activeQuartiles.has(c.dataset.category);
+    return matchSearch && matchQuartile;
+  });
   if(sortKey){
     visible.sort((a,b) => {
       let x = a.dataset[sortKey], y = b.dataset[sortKey];
@@ -95,11 +129,50 @@ function apply(){
   }
   list.innerHTML = '';
   visible.forEach(c => list.appendChild(c));
-  stats.textContent = q ? `显示 ${visible.length}/${TOTAL} 篇` : `共 ${TOTAL} 篇 · Q1 ${Q1} 篇`;
+  stats.textContent = filtering
+    ? `显示 ${visible.length}/${TOTAL} 篇`
+    : `共 ${TOTAL} 篇 · Q1 ${Q1} 篇`;
 }
 
 document.getElementById('search').addEventListener('input', apply);
 
+// 分区筛选：勾选变化时更新选中集
+allCbs.forEach(cb => {
+  cb.addEventListener('change', () => {
+    if(cb.checked){ activeQuartiles.add(cb.dataset.key); }
+    else { activeQuartiles.delete(cb.dataset.key); }
+    apply();
+  });
+});
+// 全选 / 清空
+document.getElementById('quartile-all').addEventListener('click', (e) => {
+  e.preventDefault();
+  allCbs.forEach(cb => { cb.checked = true; activeQuartiles.add(cb.dataset.key); });
+  apply();
+});
+document.getElementById('quartile-none').addEventListener('click', (e) => {
+  e.preventDefault();
+  allCbs.forEach(cb => { cb.checked = false; });
+  activeQuartiles = new Set();
+  apply();
+});
+
+// 下拉打开 / 点击外部关闭
+const qToggle = document.getElementById('quartile-toggle');
+const qMenu = document.getElementById('quartile-menu');
+if(qToggle){
+  qToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    qMenu.classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    if(qMenu && !qMenu.contains(e.target) && e.target !== qToggle){
+      qMenu.classList.remove('open');
+    }
+  });
+}
+
+// 排序
 function bindSort(id, key){
   const btn = document.getElementById(id);
   btn.addEventListener('click', () => {
@@ -118,17 +191,45 @@ apply();
 """
 
 
+def _build_quartiles(df):
+    """从 category 列构造分区筛选列表：Q1→Q4 顺序 + 其他 + 未分类。"""
+    if "category" not in df.columns:
+        return []
+    cat = df["category"].fillna("")
+    counts = cat.value_counts()
+    known = ["Q1", "Q2", "Q3", "Q4"]
+    quartiles = []
+    for q in known:
+        c = int(counts.get(q, 0))
+        if c > 0:
+            quartiles.append({"name": q, "count": c, "uncategorized": False})
+    for name, c in counts.items():
+        name = str(name)
+        if name and name not in known:
+            quartiles.append({"name": name, "count": int(c), "uncategorized": False})
+    uncat = int((cat == "").sum())
+    if uncat > 0:
+        quartiles.append({"name": "未分类", "count": uncat, "uncategorized": True})
+    return quartiles
+
+
 def generate_html(df, output_path):
     """把 DataFrame 渲染为卡片式 HTML，返回输出路径。"""
+    # category 的空值（NaN/None）统一成空串，避免渲染成 "nan" 导致未分类筛选失配
+    df = df.copy()
+    if "category" in df.columns:
+        df["category"] = df["category"].fillna("")
     records = df.to_dict(orient="records")
     has_llm = all(col in df.columns for col in ["标题翻译", "摘要翻译", "中文总结", "创新点"])
     q1_count = int((df["category"] == "Q1").sum()) if "category" in df.columns else 0
+    quartiles = _build_quartiles(df)
 
     html = Template(HTML_TEMPLATE, autoescape=True).render(
         records=records,
         has_llm=has_llm,
         total=len(records),
         q1_count=q1_count,
+        quartiles=quartiles,
     )
 
     out_dir = os.path.dirname(output_path)
