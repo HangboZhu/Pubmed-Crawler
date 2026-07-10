@@ -35,7 +35,7 @@ def normalize_pubmed_url(url):
 
 
 # 1. 在函数定义中加回 download 参数
-def main(url, translate, output, name, download_dir, error_download_paper, download):
+def main(url, translate, output, name, download_dir, error_download_paper, download, page_start=1):
     if url:
         # 规范化 URL：去反斜杠、补 format=abstract，让用户能直接粘贴原始搜索 URL
         url = normalize_pubmed_url(url)
@@ -81,9 +81,27 @@ def main(url, translate, output, name, download_dir, error_download_paper, downl
 
         xlsx_path = f"{out_dir}/{xlsx_name}"
         
-        # Extract articles from PubMed
-        df = extract_articles(url)
-        
+        # Extract articles from PubMed（支持断点续传：从指定页开始）
+        df = extract_articles(url, page_start=page_start)
+
+        # 断点续传：从非首页开始且已有结果文件时，合并旧数据
+        # 在 JCR 增强前合并，保证列结构一致（旧文件可能已被 merge 过，只取原始9列）
+        if page_start > 1 and os.path.exists(xlsx_path):
+            try:
+                old_df = pd.read_excel(xlsx_path)
+                raw_cols = ["Title", "Journal Abbreviation", "Publication Date", "PMID",
+                            "Pubmed Web", "DOI", "PMC", "Abstract", "Citation Counts"]
+                old_raw = old_df[[c for c in raw_cols if c in old_df.columns]]
+                df = pd.concat([old_raw, df], ignore_index=True)
+                if 'PMID' in df.columns:
+                    before = len(df)
+                    df = df.drop_duplicates(subset=['PMID'], keep='last').reset_index(drop=True)
+                    print(f"[INFO] Resumed from page {page_start}: merged "
+                          f"{len(old_raw)} existing records, deduped {before - len(df)}, "
+                          f"total {len(df)}.")
+            except Exception as e:
+                print(f"[WARN] Merge with existing file failed ({e}); will overwrite.")
+
         # Gain JCR Category and IF
         df = merge_dataframes(df)
         
@@ -134,10 +152,12 @@ if __name__ == "__main__":
     
     parser.add_argument('--download_dir', type=str, help='Directory to save downloaded PDFs.')
     parser.add_argument('--error_download_paper', type=str, help='File path to save failed PMIDs.')
+    parser.add_argument('--page-start', type=int, default=1,
+                        help='起始页码（断点续传用，如中断后 --page-start 36 从第36页继续）。')
 
     args = parser.parse_args()
     # 合并输出目录：-o 优先，其次 --output-folder
     output = args.output or args.output_folder
     # 4. 传参时包含 download
     main(args.url, args.translate, output, args.name,
-         args.download_dir, args.error_download_paper, args.download)
+         args.download_dir, args.error_download_paper, args.download, args.page_start)

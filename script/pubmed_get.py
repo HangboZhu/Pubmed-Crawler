@@ -1,10 +1,13 @@
-import requests 
+import requests
 from bs4 import BeautifulSoup
 import re
-import calendar 
-from urllib3.exceptions import InsecureRequestWarning 
-import pandas as pd
+import calendar
+import time
 import os
+import pandas as pd
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from urllib3.exceptions import InsecureRequestWarning
 
 # 项目根目录 = script/ 的上一级；用绝对路径避免依赖运行时 cwd
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,23 +36,82 @@ def convert_date(date_string):
     else:
         return "Unknown"
 
-import requests
-import pandas as pd
-from bs4 import BeautifulSoup
-import re  # 确保导入re（如果convert_date用到的话）
+# 默认请求头与超时配置
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+DEFAULT_TIMEOUT = (10, 30)  # (连接超时, 读取超时)，单位秒
 
 
-def extract_articles(url, page_start=1):
+def _make_session():
+    """构造带自动重试的 Session（第一道防线：处理普通连接重置与 5xx）。"""
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    session.headers.update({"User-Agent": DEFAULT_USER_AGENT})
+    return session
+
+
+def _fetch_page(session, url, page, max_retries=5, timeout=DEFAULT_TIMEOUT):
+    """请求单页，带手动指数退避重试（第二道防线）。
+
+    ProxyError / RemoteDisconnected 在 urllib3 层面可能已是 MaxRetryError，
+    requests 上层 Retry 抓不到，所以这里手动 sleep 后重试。
+    """
+    last_err = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = session.get(url, params={"page": page}, timeout=timeout, verify=False)
+            response.raise_for_status()
+            return response
+        except (requests.exceptions.ProxyError,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout,
+                requests.exceptions.ChunkedEncodingError) as e:
+            last_err = e
+            wait = min(2 ** attempt, 30)  # 指数退避，上限30秒
+            print(f"[WARN] Page {page} request failed (attempt {attempt}/{max_retries}): "
+                  f"{type(e).__name__}; retry in {wait}s...")
+            time.sleep(wait)
+    raise last_err
+
+
+def extract_articles(url, page_start=1, page_end=None, sleep_interval=1.0,
+                     max_retries=5, timeout=DEFAULT_TIMEOUT):
     data = []
     page = page_start
+    session = _make_session()
     while True:
-        response = requests.get(url, params={"page": page}, verify=False)
+        # 支持指定结束页（断点续传时可限定范围）
+        if page_end and page > page_end:
+            break
+
+        # 网络容错：重试用尽后降级返回已采集数据，避免一次瞬断丢失全部成果
+        try:
+            response = _fetch_page(session, url, page, max_retries=max_retries, timeout=timeout)
+        except requests.exceptions.RequestException as e:
+            print(f"[ERROR] Page {page} failed after {max_retries} retries: "
+                  f"{type(e).__name__}: {e}")
+            print(f"[INFO] Collected {len(data)} records so far (up to page {page - 1}).")
+            if data:
+                print(f"[INFO] Partial results will be saved to avoid data loss.")
+                print(f"[INFO] To resume: re-run with --page-start {page}.")
+            break
+
         content = response.content
         soup = BeautifulSoup(content, "html.parser")
-        
+
         # 【关键修改 1】: 循环的基准从 "div.short-view" 改为 "article.article-overview"
         articles = soup.find_all("article", {"class": "article-overview"})
-        
+
         print(f'Found {len(articles)} articles on page {page}')
         if len(articles) == 0:
             break  # 没有文章时退出循环
@@ -128,7 +190,10 @@ def extract_articles(url, page_start=1):
         
         print(f'PubMed: Completed page {page}')
         page += 1
-    
+        # 请求间隔，降低被 PubMed/代理限流的概率
+        if sleep_interval and sleep_interval > 0:
+            time.sleep(sleep_interval)
+
     df = pd.DataFrame(
         data, 
         columns=[
