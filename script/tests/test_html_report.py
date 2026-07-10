@@ -32,7 +32,9 @@ def test_generate_html_without_llm_columns(tmp_path):
     out = tmp_path / "r.html"
     generate_html(_df_without_llm(), str(out))
     html = out.read_text(encoding="utf-8")
-    assert "摘要翻译" not in html
+    # 无 LLM 列时不渲染翻译/总结/创新点区块（JS 导出 cols 里的字符串常量不算）
+    assert "<h3>摘要翻译</h3>" not in html
+    assert "<h3>创新点</h3>" not in html
 
 
 def test_generate_html_with_llm_columns(tmp_path):
@@ -91,3 +93,43 @@ def test_generate_html_uncategorized_option(tmp_path):
     # None/NaN → 空 data-category（不能渲染成 "nan"，否则未分类筛选失配）
     assert 'data-category=""' in html
     assert 'data-category="nan"' not in html
+
+
+def test_generate_html_has_favorite_button(tmp_path):
+    out = tmp_path / "r.html"
+    generate_html(_df_without_llm(), str(out))
+    html = out.read_text(encoding="utf-8")
+    assert 'class="fav-btn"' in html
+
+
+def test_generate_html_has_tabs(tmp_path):
+    out = tmp_path / "r.html"
+    generate_html(_df_without_llm(), str(out))
+    html = out.read_text(encoding="utf-8")
+    assert 'id="tab-all"' in html
+    assert 'id="tab-fav"' in html
+
+
+def test_generate_html_links_open_new_tab(tmp_path):
+    out = tmp_path / "r.html"
+    generate_html(_df_without_llm(), str(out))
+    html = out.read_text(encoding="utf-8")
+    assert 'target="_blank"' in html
+    assert 'rel="noopener"' in html
+
+
+def test_generate_html_has_stable_data_id(tmp_path):
+    # _df_without_llm 无 PMID、有 DOI "10.1/x" → data-id="doi:10.1/x"
+    out = tmp_path / "r.html"
+    generate_html(_df_without_llm(), str(out))
+    html = out.read_text(encoding="utf-8")
+    assert 'data-id="doi:10.1/x"' in html
+
+
+def test_generate_html_embeds_records_for_export(tmp_path):
+    out = tmp_path / "r.html"
+    generate_html(_df_without_llm(), str(out))
+    html = out.read_text(encoding="utf-8")
+    assert "const RECORDS" in html
+    # 导出按钮
+    assert 'id="export-csv"' in html

@@ -10,7 +10,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>文献阅读视图</title>
 <style>
-:root{--bg:#f5f5f7;--card:#fff;--accent:#2563eb;--text:#1f2937;--muted:#6b7280;--border:#e5e7eb;}
+:root{--bg:#f5f5f7;--card:#fff;--accent:#2563eb;--text:#1f2937;--muted:#6b7280;--border:#e5e7eb;--fav:#f59e0b;}
 *{box-sizing:border-box;}
 body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}
 header{position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--border);padding:12px 20px;z-index:10;}
@@ -19,9 +19,16 @@ input[type=search]{flex:1;min-width:200px;padding:8px 12px;border:1px solid var(
 button{padding:8px 12px;border:1px solid var(--border);background:var(--card);border-radius:8px;cursor:pointer;font-size:14px;}
 button.active{background:var(--accent);color:#fff;border-color:var(--accent);}
 .stats{color:var(--muted);font-size:13px;}
+.tabs{display:flex;gap:6px;align-items:center;max-width:920px;margin:12px auto 0;}
+.tab{padding:6px 14px;border:1px solid var(--border);background:var(--card);border-radius:8px;cursor:pointer;font-size:14px;}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.export-btn{margin-left:auto;color:var(--accent);border-color:var(--accent);}
 .container{max-width:920px;margin:0 auto;padding:20px;}
-.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
-.card h2{margin:0 0 4px;font-size:18px;line-height:1.4;}
+.card{position:relative;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.fav-btn{position:absolute;top:12px;right:12px;background:none;border:none;cursor:pointer;font-size:22px;line-height:1;color:#d1d5db;padding:4px;}
+.fav-btn:hover{color:var(--fav);}
+.fav-btn.active{color:var(--fav);}
+.card h2{margin:0 0 4px;font-size:18px;line-height:1.4;padding-right:36px;}
 .zh-title{color:var(--accent);font-size:15px;margin-bottom:8px;}
 .meta{display:flex;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:12px;}
 .meta span{background:var(--bg);padding:2px 8px;border-radius:10px;}
@@ -67,14 +74,21 @@ details summary{cursor:pointer;color:var(--muted);font-size:13px;}
     {% endif %}
     <span class="stats" id="stats"></span>
   </div>
+  <div class="tabs">
+    <button class="tab active" id="tab-all">全部</button>
+    <button class="tab" id="tab-fav">收藏 (<span id="fav-count">0</span>)</button>
+    <button class="export-btn" id="export-csv">⬇ 导出收藏 CSV</button>
+  </div>
 </header>
 <div class="container" id="list">
   {% for r in records %}
   <div class="card"
+       data-id="{{ r._id }}"
        data-title="{{ ((r.get('Title','') or '') ~ (r.get('标题翻译','') or '')) | lower }}"
        data-cite="{{ r.get('Citation Counts',0) or 0 }}"
        data-date="{{ r.get('Publication Date','') or '' }}"
        data-category="{{ r.get('category','') or '' }}">
+    <button class="fav-btn" data-id="{{ r._id }}" title="收藏/取消收藏">☆</button>
     <h2>{{ r.get('Title','') or '' }}</h2>
     {% if r.get('标题翻译') %}<div class="zh-title">{{ r['标题翻译'] }}</div>{% endif %}
     <div class="meta">
@@ -94,31 +108,49 @@ details summary{cursor:pointer;color:var(--muted);font-size:13px;}
       {% if r.get('创新点') %}<div class="section"><h3>创新点</h3><p>{{ r['创新点'] }}</p></div>{% endif %}
     {% endif %}
     <div class="links">
-      {% if r.get('DOI') %}<a href="https://doi.org/{{ r['DOI'] }}">DOI</a>{% endif %}
-      {% if r.get('PMC') %}<a href="https://www.ncbi.nlm.nih.gov/pmc/articles/{{ r['PMC'] }}/">PMC</a>{% endif %}
-      {% if r.get('Pubmed Web') %}<a href="{{ r['Pubmed Web'] }}">PubMed</a>{% endif %}
+      {% if r.get('DOI') %}<a href="https://doi.org/{{ r['DOI'] }}" target="_blank" rel="noopener">DOI</a>{% endif %}
+      {% if r.get('PMC') %}<a href="https://www.ncbi.nlm.nih.gov/pmc/articles/{{ r['PMC'] }}/" target="_blank" rel="noopener">PMC</a>{% endif %}
+      {% if r.get('Pubmed Web') %}<a href="{{ r['Pubmed Web'] }}" target="_blank" rel="noopener">PubMed</a>{% endif %}
     </div>
   </div>
   {% endfor %}
   {% if not records %}<div class="empty">没有文献</div>{% endif %}
 </div>
 <script>
+// 嵌入完整记录，供「导出收藏 CSV」使用
+const RECORDS = {{ records|tojson }};
+const FAV_KEY = 'pubmed_favorites';
+let favorites = new Set(JSON.parse(localStorage.getItem(FAV_KEY) || '[]'));
+let currentTab = 'all';
+
 const cards = Array.from(document.querySelectorAll('.card'));
 const list = document.getElementById('list');
 const stats = document.getElementById('stats');
 const TOTAL = {{ total }}, Q1 = {{ q1_count }};
 const allCbs = Array.from(document.querySelectorAll('.quartile-cb'));
 let sortKey = null, sortDir = -1;
-// 当前选中的分区 key 集合（默认全选）
 let activeQuartiles = new Set(allCbs.map(cb => cb.dataset.key));
+
+function saveFav(){ localStorage.setItem(FAV_KEY, JSON.stringify([...favorites])); }
+
+function syncFavUI(){
+  document.querySelectorAll('.fav-btn').forEach(btn => {
+    const on = favorites.has(btn.dataset.id);
+    btn.textContent = on ? '★' : '☆';
+    btn.classList.toggle('active', on);
+  });
+  cards.forEach(c => c.classList.toggle('favorited', favorites.has(c.dataset.id)));
+  document.getElementById('fav-count').textContent = favorites.size;
+}
 
 function apply(){
   const q = document.getElementById('search').value.trim().toLowerCase();
-  const filtering = q || activeQuartiles.size < allCbs.length;
+  const filtering = q || activeQuartiles.size < allCbs.length || currentTab === 'fav';
   let visible = cards.filter(c => {
     const matchSearch = !q || c.dataset.title.includes(q);
     const matchQuartile = activeQuartiles.has(c.dataset.category);
-    return matchSearch && matchQuartile;
+    const matchTab = currentTab === 'all' || c.classList.contains('favorited');
+    return matchSearch && matchQuartile && matchTab;
   });
   if(sortKey){
     visible.sort((a,b) => {
@@ -129,6 +161,14 @@ function apply(){
   }
   list.innerHTML = '';
   visible.forEach(c => list.appendChild(c));
+  if(visible.length === 0){
+    const msg = currentTab === 'fav'
+      ? '还没有收藏的文献（点卡片右上角 ☆ 收藏）'
+      : (q ? '没有匹配的文献' : '没有文献');
+    const e = document.createElement('div');
+    e.className = 'empty'; e.textContent = msg;
+    list.appendChild(e);
+  }
   stats.textContent = filtering
     ? `显示 ${visible.length}/${TOTAL} 篇`
     : `共 ${TOTAL} 篇 · Q1 ${Q1} 篇`;
@@ -136,15 +176,56 @@ function apply(){
 
 document.getElementById('search').addEventListener('input', apply);
 
-// 分区筛选：勾选变化时更新选中集
+// 收藏切换
+document.querySelectorAll('.fav-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const id = btn.dataset.id;
+    if(favorites.has(id)){ favorites.delete(id); } else { favorites.add(id); }
+    saveFav(); syncFavUI(); apply();
+  });
+});
+
+// Tab 切换（全部 / 收藏）
+function switchTab(t){
+  currentTab = t;
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  document.getElementById(t === 'all' ? 'tab-all' : 'tab-fav').classList.add('active');
+  apply();
+}
+document.getElementById('tab-all').addEventListener('click', () => switchTab('all'));
+document.getElementById('tab-fav').addEventListener('click', () => switchTab('fav'));
+
+// 导出收藏为 CSV（UTF-8 BOM，Excel 友好）
+function escCsv(v){
+  if(v === null || v === undefined || (typeof v === 'number' && isNaN(v))) v = '';
+  v = String(v);
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v;
+}
+document.getElementById('export-csv').addEventListener('click', () => {
+  const favRecords = RECORDS.filter(r => favorites.has(r._id));
+  if(favRecords.length === 0){ alert('还没有收藏的文献，先点卡片右上角 ☆ 收藏吧'); return; }
+  const cols = ['Title','JournalTitle','Journal Abbreviation','Publication Date','PMID','DOI','PMC','category','if_2024','Citation Counts','标题翻译','摘要翻译','中文总结','创新点','Pubmed Web'];
+  const lines = [cols.join(',')];
+  favRecords.forEach(r => { lines.push(cols.map(c => escCsv(r[c])).join(',')); });
+  const csv = '﻿' + lines.join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'favorites.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+});
+
+// 分区筛选
 allCbs.forEach(cb => {
   cb.addEventListener('change', () => {
-    if(cb.checked){ activeQuartiles.add(cb.dataset.key); }
-    else { activeQuartiles.delete(cb.dataset.key); }
+    if(cb.checked){ activeQuartiles.add(cb.dataset.key); } else { activeQuartiles.delete(cb.dataset.key); }
     apply();
   });
 });
-// 全选 / 清空
 document.getElementById('quartile-all').addEventListener('click', (e) => {
   e.preventDefault();
   allCbs.forEach(cb => { cb.checked = true; activeQuartiles.add(cb.dataset.key); });
@@ -156,19 +237,12 @@ document.getElementById('quartile-none').addEventListener('click', (e) => {
   activeQuartiles = new Set();
   apply();
 });
-
-// 下拉打开 / 点击外部关闭
 const qToggle = document.getElementById('quartile-toggle');
 const qMenu = document.getElementById('quartile-menu');
 if(qToggle){
-  qToggle.addEventListener('click', (e) => {
-    e.stopPropagation();
-    qMenu.classList.toggle('open');
-  });
+  qToggle.addEventListener('click', (e) => { e.stopPropagation(); qMenu.classList.toggle('open'); });
   document.addEventListener('click', (e) => {
-    if(qMenu && !qMenu.contains(e.target) && e.target !== qToggle){
-      qMenu.classList.remove('open');
-    }
+    if(qMenu && !qMenu.contains(e.target) && e.target !== qToggle){ qMenu.classList.remove('open'); }
   });
 }
 
@@ -184,11 +258,27 @@ function bindSort(id, key){
 }
 bindSort('sort-cite', 'cite');
 bindSort('sort-date', 'date');
+
+syncFavUI();
 apply();
 </script>
 </body>
 </html>
 """
+
+
+def _record_id(rec):
+    """文献稳定 ID：PMID 优先，DOI 备选，标题兜底（用于收藏持久化）。"""
+    for key, prefix in (("PMID", "pmid"), ("DOI", "doi")):
+        val = rec.get(key)
+        # 跳过 NaN（float 且 self-unequal）
+        if isinstance(val, float) and val != val:
+            continue
+        s = str(val).strip() if val is not None else ""
+        if s and s.lower() != "nan":
+            return f"{prefix}:{s}"
+    title = str(rec.get("Title", "") or "").strip()
+    return f"title:{title}"
 
 
 def _build_quartiles(df):
@@ -220,6 +310,8 @@ def generate_html(df, output_path):
     if "category" in df.columns:
         df["category"] = df["category"].fillna("")
     records = df.to_dict(orient="records")
+    for rec in records:
+        rec["_id"] = _record_id(rec)
     has_llm = all(col in df.columns for col in ["标题翻译", "摘要翻译", "中文总结", "创新点"])
     q1_count = int((df["category"] == "Q1").sum()) if "category" in df.columns else 0
     quartiles = _build_quartiles(df)
