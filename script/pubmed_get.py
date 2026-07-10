@@ -1,32 +1,25 @@
-import requests
+# curl_cffi 提供浏览器级 TLS 指纹，绕过 NCBI 的爬虫检测
+from curl_cffi import requests
 from bs4 import BeautifulSoup
 import re
 import calendar
 import time
 import os
 import pandas as pd
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-from urllib3.exceptions import InsecureRequestWarning
 
 # 项目根目录 = script/ 的上一级；用绝对路径避免依赖运行时 cwd
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
-requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
+
 
 # 定义日期转换
 def convert_date(date_string):
     match = re.search(r"(\d{4})(?: (\w{3})(?: (\d{1,2}))?)?", date_string)
-    # print(f"Original date string: {date_string}")
-    # print(f"Converting date: {match}")
     if match:
         year, month, day = match.groups()
         if month:
             month_dict = {v: k for k, v in enumerate(calendar.month_abbr)}
-            # print(f"Converting month: {month}")
-            # 获取月份，未找到则返回"Unknown"
             month = month_dict.get(month, "Unknown")
-            # 若月份为"Unknown"，直接返回
             if month == "Unknown":
                 return "Unknown"
             day = day if day else "01"
@@ -36,27 +29,14 @@ def convert_date(date_string):
     else:
         return "Unknown"
 
-# 默认请求头与超时配置
-DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-)
+
+# 默认超时配置
 DEFAULT_TIMEOUT = (10, 30)  # (连接超时, 读取超时)，单位秒
 
 
 def _make_session():
-    """构造带自动重试的 Session（第一道防线：处理普通连接重置与 5xx）。"""
-    session = requests.Session()
-    retry = Retry(
-        total=3,
-        backoff_factor=1,
-        status_forcelist=[429, 500, 502, 503, 504],
-        raise_on_status=False,
-    )
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
-    session.headers.update({"User-Agent": DEFAULT_USER_AGENT})
+    """构造带浏览器 TLS 指纹的 Session（绕过 NCBI 爬虫检测）。"""
+    session = requests.Session(impersonate="chrome131")
     return session
 
 

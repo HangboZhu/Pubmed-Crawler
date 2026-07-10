@@ -18,6 +18,7 @@ dependencies = [
     "requests>=2.32.5",
     "scihub-cn>=0.1.1",
     "selenium>=4.45.0",
+    "curl_cffi>=0.13.0",
     "setuptools>=80.9.0",
     "urllib3>=2.5.0",
     "webdriver-manager>=4.1.2",
